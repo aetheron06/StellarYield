@@ -1,7 +1,3 @@
-import request from 'supertest';
-import { Express } from 'express';
-import { opportunityMomentumEngine } from '../services/opportunityMomentumEngine';
-
 // Mock the momentum engine
 jest.mock('../services/opportunityMomentumEngine', () => ({
   opportunityMomentumEngine: {
@@ -16,13 +12,6 @@ jest.mock('../services/opportunityMomentumEngine', () => ({
     clearHistory: jest.fn(),
   },
 }));
-
-// Mock app
-const mockApp = {
-  post: jest.fn(),
-  get: jest.fn(),
-  delete: jest.fn(),
-} as any;
 
 describe('Momentum Routes', () => {
   beforeEach(() => {

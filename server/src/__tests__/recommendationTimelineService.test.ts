@@ -9,8 +9,8 @@ describe("recommendationTimelineService", () => {
     resetRecommendationTimelineStore();
   });
 
-  it("stores recommendation history with timestamps", () => {
-    const entry = recordRecommendation("user-1", {
+  it("stores recommendation history with timestamps", async () => {
+    const entry = await recordRecommendation("user-1", {
       recommendation: "Allocate to Blend vault.",
       targetVault: "Blend Stable",
       rationale: "Stable fees and deep liquidity.",
@@ -28,8 +28,8 @@ describe("recommendationTimelineService", () => {
     expect(timeline[0].changedInputs).toContain("initial-baseline");
   });
 
-  it("tracks changed inputs against prior recommendation", () => {
-    recordRecommendation("user-2", {
+  it("tracks changed inputs against prior recommendation", async () => {
+    await recordRecommendation("user-2", {
       recommendation: "Use DeFindex index vault.",
       targetVault: "DeFindex Index",
       rationale: "Diversified routing.",
@@ -41,7 +41,7 @@ describe("recommendationTimelineService", () => {
       },
     });
 
-    const updated = recordRecommendation("user-2", {
+    const updated = await recordRecommendation("user-2", {
       recommendation: "Switch to Soroswap LP.",
       targetVault: "Soroswap LP",
       rationale: "Yield increased after volatility shift.",

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { opportunityMomentumEngine, OpportunitySnapshot } from '../services/opportunityMomentumEngine';
+import { opportunityMomentumEngine } from '../services/opportunityMomentumEngine';
 
 const router = Router();
 

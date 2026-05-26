@@ -1,14 +1,3 @@
-import request from 'supertest';
-import { Express } from 'express';
-
-// Simple mock for testing basic route structure
-const mockApp = {
-  get: jest.fn(),
-  post: jest.fn(),
-  delete: jest.fn(),
-  use: jest.fn(),
-} as any;
-
 describe('Analytics Routes Simple Contract Tests', () => {
   describe('Route Structure Validation', () => {
     it('should validate attribution report response structure', () => {

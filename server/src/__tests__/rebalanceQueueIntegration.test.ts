@@ -166,7 +166,7 @@ describe('Rebalance Queue and Strategy Versioning Integration', () => {
         updatedAt: new Date(),
       });
 
-      const queueEntry = await queueService.enqueueRebalance(
+      const _queueEntry = await queueService.enqueueRebalance(
         vaultId,
         { BTC: 0.5, ETH: 0.5 },
         { BTC: 0.6, ETH: 0.4 },

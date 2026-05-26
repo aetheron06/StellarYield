@@ -385,7 +385,11 @@ router.post('/reliability/batch', async (req, res) => {
  */
 router.get('/reliability/compare', async (req, res) => {
   try {
-    const providers = await yieldReliabilityEngine.getAllProviderIds();
+    const providers = [
+      { id: 'blend_api', name: 'Blend Protocol', source: 'api' },
+      { id: 'soroswap_api', name: 'Soroswap', source: 'api' },
+      { id: 'defindex_api', name: 'DeFindex', source: 'api' },
+    ];
     const comparison = await yieldReliabilityEngine.compareProviders(providers);
     
     res.json({
@@ -495,7 +499,7 @@ router.get('/dashboard', async (req, res) => {
     try {
       const compatibility = await protocolCompatibilityEngine.runCompatibilityCheck();
       dashboardData.compatibility = formatCompatibilityReport(compatibility);
-      (dashboardData.summary as { criticalIssues: number }).criticalIssues = compatibility.issues?.filter((issue: { severity: string }) => issue.severity === 'critical').length || 0;
+      (dashboardData.summary as { criticalIssues: number }).criticalIssues = compatibility.criticalIssues?.length || 0;
     } catch (error) {
       console.error('Compatibility data fetch failed:', error);
     }

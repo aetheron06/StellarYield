@@ -102,7 +102,7 @@ export class RebalanceQueueService {
         executionType: EXECUTION_TYPE.FULL,
         targetAllocations,
         currentAllocations,
-        executionStrategy,
+        executionStrategy: executionStrategy as any,
         intentHash,
         intentValidUntil: options?.intentValidUntil || new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
         maxRetries: options?.maxRetries ?? this.defaultPartialFillConfig.maxRetries,
@@ -148,7 +148,7 @@ export class RebalanceQueueService {
         queueEntryId,
         vaultId: queueEntry.vaultId,
         executionType: EXECUTION_TYPE.PARTIAL,
-        executionResult: result.executionDetails,
+        executionResult: result.executionDetails as any,
         totalExecuted: result.totalExecuted,
         expectedAmount: result.expectedAmount,
         filledPercentage: result.filledPercentage,
@@ -157,7 +157,7 @@ export class RebalanceQueueService {
       },
     });
 
-    let newStatus = REBALANCE_STATUS.PARTIAL;
+    let newStatus: RebalanceStatus = REBALANCE_STATUS.PARTIAL;
     let followUpEntryId: string | null = null;
 
     // Determine if we should defer or retry
@@ -445,7 +445,7 @@ export class RebalanceQueueService {
         executionType: EXECUTION_TYPE.DEFERRED,
         targetAllocations: originalEntry.targetAllocations,
         currentAllocations: updatedAllocations,
-        executionStrategy: originalEntry.executionStrategy,
+        executionStrategy: originalEntry.executionStrategy as any,
         partiallyExecuted: true,
         partialFillAmount: 0,
         intentHash: this.generateIntentHash(
