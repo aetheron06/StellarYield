@@ -1,6 +1,113 @@
-# Backend Testing Guide via CLI
+# Backend environment + testing guide
 
-This guide provides `curl` commands to test the new features implemented in the StellarYield backend.
+This guide focuses on **backend environment setup** (development, tests, production) and provides `curl` commands for exercising key API routes.
+
+The backend validates environment at startup via `assertValidServerEnv()` (see `server/src/config/env.ts`). In development it prints warnings; in production it throws on missing required values.
+
+---
+
+## Minimum environment for local backend tests
+
+GitHub Actions runs backend tests with a Postgres service and a `DATABASE_URL`. Locally, the minimum reliable setup is:
+
+- **`DATABASE_URL`**: required for Jest tests and Prisma-backed paths.
+- **`NODE_ENV`**: keep at `development` (or unset) for local work. Setting `NODE_ENV=production` intentionally turns several warnings into hard errors.
+
+### Start a local Postgres (matches CI)
+
+```bash
+docker run --rm --name stellaryield-pg \
+  -e POSTGRES_USER=test \
+  -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_DB=stellaryield_test \
+  -p 5432:5432 \
+  postgres:15
+```
+
+### Install, validate, and run tests
+
+```bash
+cd server
+export DATABASE_URL="postgresql://test:test@localhost:5432/stellaryield_test"
+
+npm ci --no-audit --prefer-offline
+npx prisma generate
+npx prisma db push
+npm test
+```
+
+---
+
+## Development setup (local API work)
+
+For basic local API work you can start with `server/.env.example` and only fill what you need. Commonly used values:
+
+- **`PORT`**: defaults to `3001`
+- **`STELLAR_HORIZON_URL`** / **`SOROBAN_RPC_URL`**: optional (reasonable testnet fallbacks exist)
+- **`MONGODB_URI`**: optional in dev; without it, snapshot/history jobs and DB-backed routes may be unavailable
+- **`RELAYER_SECRET_KEY`**: optional unless you use `/api/relayer/fee-bump` (keep sample values non-secret)
+
+---
+
+## Production-only requirements (examples, non-secret)
+
+Production startup is stricter. At a minimum, expect these to be **required**:
+
+- **`MONGODB_URI`**: persistence for DB-backed routes and jobs
+- **`DATABASE_URL`**: required for Prisma-backed features and test-equivalent DB usage
+- **`METRICS_TOKEN`**: required to protect `/api/metrics` (prevents unauthenticated scraping)
+- **`RELAYER_SECRET_KEY`**: required if relayer endpoints are enabled/used
+
+Example (values are placeholders; do not commit secrets):
+
+```bash
+NODE_ENV=production
+PORT=3001
+MONGODB_URI="mongodb+srv://<user>:<password>@<cluster>/<db>?retryWrites=true&w=majority"
+DATABASE_URL="postgresql://<user>:<password>@<host>:5432/<db>"
+METRICS_TOKEN="replace-with-a-real-token"
+RELAYER_SECRET_KEY="SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+```
+
+### Metrics protection behavior
+
+When `METRICS_TOKEN` is set, `/api/metrics` expects one of:
+
+- `Authorization: Bearer <token>` or
+- `x-metrics-token: <token>`
+
+---
+
+## Common validation errors (and fixes)
+
+These messages come from `server/src/config/env.ts`:
+
+- **`PORT must be a number when provided.`**
+  - Fix: set `PORT=3001` (not `PORT=abc`).
+- **`DATABASE_URL is not set...`**
+  - Fix (tests/CI parity): set `DATABASE_URL` and ensure Postgres is reachable, then run `npx prisma generate` + `npx prisma db push`.
+- **`MONGODB_URI is not set...`**
+  - Fix: set `MONGODB_URI` (required in production; advisory in dev).
+- **`METRICS_TOKEN is required in production to protect /api/metrics.`**
+  - Fix: set a real token in production deployments and configure your metrics scraper to send it.
+- **`RELAYER_SECRET_KEY must be set...`**
+  - Fix: only required if you use relayer endpoints; use a real Stellar secret in secure environments (never commit).
+- **`DEX_ROUTER_CONTRACT_ID and ZAP_QUOTE_SIM_SOURCE_ACCOUNT must be configured together.`**
+  - Fix: set both variables (or neither). Partial configuration is rejected.
+
+## Metrics endpoints (production protection)
+
+In production, metrics endpoints are protected by `METRICS_TOKEN` and return **404** when unauthorized to avoid advertising the endpoint:
+
+- JSON metrics: `GET /api/metrics`
+- Prometheus scrape: `GET /metrics`
+
+Both accept either:
+
+- `Authorization: Bearer <token>` or
+- `x-metrics-token: <token>`
+
+For **token rotation steps** and post-rotation validation commands, see [docs/metrics-token-rotation.md](./metrics-token-rotation.md).
 
 ## 1. APY Attribution Breakdown (#287)
 

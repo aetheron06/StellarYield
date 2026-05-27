@@ -57,6 +57,8 @@ The backend runs on `http://localhost:3001`.
   The example env files document required and optional values. Keep real secrets
   out of git; frontend values must be public `VITE_` values only.
 
+The backend also performs startup environment validation (warnings in development, errors in production). For CI-parity examples of **minimum env vars for backend tests** (including `DATABASE_URL`) and common validation failures, see [docs/backend_testing.md](./docs/backend_testing.md).
+
 For the **full list of `VITE_` variables the client reads** — including required values, contract IDs, optional integrations, and a production deployment checklist — see [docs/frontend-env-reference.md](./docs/frontend-env-reference.md).
 
 ### API Documentation
@@ -163,8 +165,9 @@ bash scripts/smoke-test.sh
   🌊 Contributing via Drips Wave
   We are proudly participating in the Stellar Wave Program via Drips! We are actively looking for Web3 full-stack and Rust developers.
   Check our open issues labeled `Stellar Wave`, apply via the Drips App, and submit your PR to earn rewards funded by the Stellar Development Foundation!
+- [Metrics token rotation guide](./docs/metrics-token-rotation.md)
 - [Contributing Guide](./CONTRIBUTING.md)
-- [Pre-commit Formatting and Verification Guide](./docs/contributor-guide.md)
+- [Contributor guide: CI checks, local verification, and getting help](./docs/contributor-guide.md)
 - [Release Checklist](./docs/release-checklist.md)
 
 ## Drips Wave
