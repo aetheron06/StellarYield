@@ -631,4 +631,25 @@ router.post(
   },
 );
 
+/**
+ * GET /api/analytics/providers/uptime
+ * Returns historical uptime reports for all known yield data providers.
+ */
+router.get('/providers/uptime', async (_req, res) => {
+  try {
+    const reports = await yieldReliabilityEngine.getAllProviderUptimeReports();
+    res.json({
+      success: true,
+      data: reports,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Failed to fetch provider uptime reports:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'UPTIME_FETCH_FAILED', message: 'Unable to fetch provider uptime reports.' },
+    });
+  }
+});
+
 export default router;

@@ -19,6 +19,7 @@ import {
 import type { ZapAssetOption, ZapQuoteResponse } from "./types";
 import { useSettings } from "../settings/SettingsContext";
 import { resolveSlippage } from "../settings/types";
+import DepositRouteMaterialImpactWarning from "./DepositRouteMaterialImpactWarning";
 
 export interface ZapDepositPanelProps {
   walletAddress: string | null;
@@ -461,6 +462,18 @@ export default function ZapDepositPanel({ walletAddress }: ZapDepositPanelProps)
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Deposit route impact warning */}
+      {needsSwap && amount && parseFloat(amount) > 0 && (
+        <div className="mb-4">
+          <DepositRouteMaterialImpactWarning
+            amountUsd={0}
+            slippageTolerance={slippageTolerance}
+            isFallback={isFallback}
+            isStale={isStale}
+          />
         </div>
       )}
 

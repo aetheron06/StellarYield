@@ -318,3 +318,244 @@ export function simulateRebalance(params: RebalanceParams): RebalancePreview {
     warnings,
   };
 }
+
+// ── Rebalance Backtest Engine ─────────────────────────────────────────────
+//
+// Simulates a historical rebalancing strategy (schedule or drift-threshold
+// based) day-by-day and compares against a passive hold benchmark.
+// Fully deterministic — same inputs always produce the same outputs.
+
+export interface RebalanceAllocationRule {
+  label: string;
+  targetWeight: number;   // 0-100, must sum to ~100 across all allocations
+  apy: number;            // annual %, e.g. 10 = 10%
+  liquidityUsd?: number;  // optional, for context only
+}
+
+export interface RebalanceBacktestParams {
+  initialValueUsd: number;
+  startDate: string;               // "YYYY-MM-DD"
+  endDate: string;                 // "YYYY-MM-DD"
+  allocations: RebalanceAllocationRule[];
+  strategy: 'schedule' | 'threshold';
+  rebalanceIntervalDays?: number;  // for schedule (default 30)
+  driftThresholdPct?: number;      // for threshold: max allowed weight drift (default 5)
+  feeBps?: number;                 // rebalance turnover fee in bps (default 20)
+}
+
+export interface RebalanceBacktestSnapshot {
+  date: string;
+  portfolioValue: number;   // rebalanced portfolio
+  passiveValue: number;     // passive benchmark (never rebalanced)
+  rebalanced: boolean;
+  blendedApyPct: number;   // weighted APY of current allocation
+}
+
+export interface RebalanceEvent {
+  date: string;
+  reason: string;
+  maxDriftPct: number;
+  feeUsd: number;
+}
+
+export interface RebalanceBacktestResult {
+  isSimulationOnly: true;
+  startDate: string;
+  endDate: string;
+  initialValueUsd: number;
+  finalPortfolioValue: number;
+  finalPassiveValue: number;
+  portfolioReturnPct: number;
+  passiveReturnPct: number;
+  outperformancePct: number;    // portfolio - passive return, expressed as % of initial
+  rebalanceCount: number;
+  totalFeesUsd: number;
+  snapshots: RebalanceBacktestSnapshot[];
+  rebalanceEvents: RebalanceEvent[];
+}
+
+export const BACKTEST_LIMITS = {
+  maxDays: 1825,      // 5 years
+  maxAllocations: 20,
+} as const;
+
+/**
+ * Validate backtest params. Returns array of error strings; empty means valid.
+ */
+export function validateRebalanceBacktestParams(params: RebalanceBacktestParams): string[] {
+  const errors: string[] = [];
+
+  if (!params.startDate || !params.endDate) {
+    errors.push("startDate and endDate are required.");
+  } else {
+    const start = new Date(params.startDate);
+    const end = new Date(params.endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      errors.push("startDate and endDate must be valid ISO date strings.");
+    } else if (start >= end) {
+      errors.push("startDate must be before endDate.");
+    } else {
+      const dayDiff = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+      if (dayDiff > BACKTEST_LIMITS.maxDays) {
+        errors.push(`Date range exceeds maximum of ${BACKTEST_LIMITS.maxDays} days.`);
+      }
+    }
+  }
+
+  if (!Number.isFinite(params.initialValueUsd) || params.initialValueUsd <= 0) {
+    errors.push("initialValueUsd must be a positive number.");
+  }
+
+  if (!Array.isArray(params.allocations) || params.allocations.length === 0) {
+    errors.push("allocations must be a non-empty array.");
+    return errors;
+  }
+
+  if (params.allocations.length > BACKTEST_LIMITS.maxAllocations) {
+    errors.push(`Too many allocations (max ${BACKTEST_LIMITS.maxAllocations}).`);
+  }
+
+  let weightSum = 0;
+  for (const alloc of params.allocations) {
+    if (!alloc.label) errors.push("Each allocation must have a label.");
+    if (!Number.isFinite(alloc.targetWeight) || alloc.targetWeight < 0 || alloc.targetWeight > 100) {
+      errors.push(`targetWeight for "${alloc.label || 'allocation'}" must be 0-100.`);
+    }
+    if (!Number.isFinite(alloc.apy) || alloc.apy < 0) {
+      errors.push(`apy for "${alloc.label || 'allocation'}" must be a non-negative number.`);
+    }
+    weightSum += alloc.targetWeight;
+  }
+
+  if (Math.abs(weightSum - 100) > 0.5) {
+    errors.push(`targetWeights must sum to 100 (got ${round2(weightSum)}).`);
+  }
+
+  if (params.strategy !== 'schedule' && params.strategy !== 'threshold') {
+    errors.push("strategy must be 'schedule' or 'threshold'.");
+  }
+
+  return errors;
+}
+
+/**
+ * Run a deterministic historical rebalance backtest.
+ * @throws Error when params fail validation.
+ */
+export function runRebalanceBacktest(params: RebalanceBacktestParams): RebalanceBacktestResult {
+  const errors = validateRebalanceBacktestParams(params);
+  if (errors.length > 0) {
+    throw new Error(`Invalid backtest parameters: ${errors.join(" ")}`);
+  }
+
+  const feeBps = params.feeBps ?? 20;
+  const rebalanceIntervalDays = params.rebalanceIntervalDays ?? 30;
+  const driftThresholdPct = params.driftThresholdPct ?? 5;
+
+  const targetWeights = params.allocations.map(a => a.targetWeight / 100);
+  const dailyFactors = params.allocations.map(a => 1 + (a.apy / 100) / 365);
+
+  // Per-allocation values for the rebalanced portfolio and the passive benchmark
+  let portfolioAlloc = targetWeights.map(w => params.initialValueUsd * w);
+  let passiveAlloc = [...portfolioAlloc];
+
+  const snapshots: RebalanceBacktestSnapshot[] = [];
+  const rebalanceEvents: RebalanceEvent[] = [];
+  let totalFeesUsd = 0;
+  let dayNumber = 0;
+
+  const startMs = new Date(params.startDate).getTime();
+  const endMs = new Date(params.endDate).getTime();
+
+  for (let ms = startMs; ms <= endMs; ms += 86_400_000) {
+    const dateStr = new Date(ms).toISOString().slice(0, 10);
+
+    // Compound growth for each allocation
+    portfolioAlloc = portfolioAlloc.map((v, i) => v * dailyFactors[i]);
+    passiveAlloc = passiveAlloc.map((v, i) => v * dailyFactors[i]);
+
+    const totalPortfolio = portfolioAlloc.reduce((s, v) => s + v, 0);
+    const currentWeights = portfolioAlloc.map(v => (v / totalPortfolio) * 100);
+
+    // Determine whether a rebalance should occur today
+    let shouldRebalance = false;
+    let rebalanceReason = '';
+    let maxDrift = 0;
+
+    if (params.strategy === 'schedule') {
+      if (dayNumber > 0 && dayNumber % rebalanceIntervalDays === 0) {
+        shouldRebalance = true;
+        rebalanceReason = `Scheduled rebalance every ${rebalanceIntervalDays} days`;
+      }
+    } else {
+      const drifts = params.allocations.map((a, i) =>
+        Math.abs(currentWeights[i] - a.targetWeight),
+      );
+      maxDrift = Math.max(...drifts);
+      if (maxDrift > driftThresholdPct) {
+        shouldRebalance = true;
+        rebalanceReason = `Max weight drift ${round2(maxDrift)}% exceeded ${driftThresholdPct}% threshold`;
+      }
+    }
+
+    let feeToday = 0;
+    if (shouldRebalance) {
+      const targetValues = targetWeights.map(w => totalPortfolio * w);
+      const grossMovement = portfolioAlloc.reduce(
+        (s, v, i) => s + Math.abs(v - targetValues[i]),
+        0,
+      );
+      const turnover = grossMovement / 2;
+      feeToday = (turnover * feeBps) / 10_000;
+      totalFeesUsd += feeToday;
+
+      const valueAfterFee = totalPortfolio - feeToday;
+      portfolioAlloc = targetWeights.map(w => valueAfterFee * w);
+
+      rebalanceEvents.push({
+        date: dateStr,
+        reason: rebalanceReason,
+        maxDriftPct: round2(maxDrift),
+        feeUsd: round2(feeToday),
+      });
+    }
+
+    const portfolioTotal = portfolioAlloc.reduce((s, v) => s + v, 0);
+    const passiveTotal = passiveAlloc.reduce((s, v) => s + v, 0);
+    const blendedApy = params.allocations.reduce(
+      (sum, a, i) => sum + a.apy * (portfolioAlloc[i] / portfolioTotal),
+      0,
+    );
+
+    snapshots.push({
+      date: dateStr,
+      portfolioValue: round2(portfolioTotal),
+      passiveValue: round2(passiveTotal),
+      rebalanced: shouldRebalance,
+      blendedApyPct: round2(blendedApy),
+    });
+
+    dayNumber++;
+  }
+
+  const last = snapshots[snapshots.length - 1];
+  const finalPortfolio = last?.portfolioValue ?? params.initialValueUsd;
+  const finalPassive = last?.passiveValue ?? params.initialValueUsd;
+  const init = params.initialValueUsd;
+
+  return {
+    isSimulationOnly: true,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    initialValueUsd: init,
+    finalPortfolioValue: round2(finalPortfolio),
+    finalPassiveValue: round2(finalPassive),
+    portfolioReturnPct: round2(((finalPortfolio - init) / init) * 100),
+    passiveReturnPct: round2(((finalPassive - init) / init) * 100),
+    outperformancePct: round2(((finalPortfolio - finalPassive) / init) * 100),
+    rebalanceCount: rebalanceEvents.length,
+    totalFeesUsd: round2(totalFeesUsd),
+    snapshots,
+    rebalanceEvents,
+  };
+}
