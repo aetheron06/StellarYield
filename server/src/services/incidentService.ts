@@ -97,6 +97,13 @@ export class IncidentService {
                 return "APY_CRASH"; // Fallback
         }
     }
+
+    async linkPostmortem(id: string, postmortemUrl: string): Promise<Incident> {
+        return prisma.incident.update({
+            where: { id },
+            data: { postmortemUrl },
+        });
+    }
 }
 
 export const incidentService = new IncidentService();

@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { getApiBaseUrl } from "../../lib/api";
 import { parseSmokeRunResult } from "./smokeResults";
+import VaultReliabilityPanel from "./VaultReliabilityPanel";
 
 const API_BASE = getApiBaseUrl();
 
@@ -301,6 +302,9 @@ export default function TransparencyDashboard() {
                     </p>
                 )}
             </div>
+
+            {/* Data Source Reliability */}
+            <VaultReliabilityPanel />
         </div>
     );
 }

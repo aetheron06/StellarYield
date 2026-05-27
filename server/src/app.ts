@@ -42,6 +42,8 @@ import analyticsRouter from "./routes/analytics";
 import fragmentationRouter from "./routes/fragmentation";
 import indexerRouter from "./routes/indexer";
 import rewardsRouter from "./routes/rewards";
+import reliabilityRouter from "./routes/reliability";
+import relayerStatusRouter from "./routes/relayerStatus";
 import { createAuthChallenge, verifyAuthChallenge } from "./utils/stellarAuth";
 import {
   getRecommendationTimeline,
@@ -130,6 +132,8 @@ export function createApp() {
   app.use("/api/liquidity", fragmentationRouter);
   app.use("/api/indexer", indexerRouter);
   app.use("/api/rewards", rewardsRouter);
+  app.use("/api/reliability", reliabilityRouter);
+  app.use("/api/relayer/status", relayerStatusRouter);
 
   // Legacy JSON metrics (internal tooling)
   app.get("/api/metrics", getMetrics);

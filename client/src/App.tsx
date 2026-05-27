@@ -22,6 +22,7 @@ import ReferralDashboard from "./features/referrals/ReferralDashboard";
 import VestingDashboard from "./pages/vesting/VestingDashboard";
 import TransparencyDashboard from "./pages/transparency/TransparencyDashboard";
 import RiskChronology from "./pages/transparency/RiskChronology";
+import RelayerStatusPage from "./pages/transparency/RelayerStatusPage";
 import StressTestDashboard from "./pages/StressTestDashboard";
 import YieldForGood from "./features/donations/YieldForGood";
 import YieldCalculator from "./components/calculator/YieldCalculator";
@@ -418,6 +419,10 @@ const router = createBrowserRouter([
       {
         path: "/transparency/incidents",
         element: <RiskChronology />,
+      },
+      {
+        path: "/transparency/relayer",
+        element: <RelayerStatusPage />,
       },
       {
         path: "/yield-for-good",
