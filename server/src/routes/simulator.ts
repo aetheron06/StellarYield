@@ -4,7 +4,10 @@ import {
   SimulationParams,
   simulateRebalance,
   validateRebalanceParams,
+  runRebalanceBacktest,
+  validateRebalanceBacktestParams,
   type RebalanceParams,
+  type RebalanceBacktestParams,
 } from "../services/simulationService";
 
 const router = Router();
@@ -74,6 +77,29 @@ router.post("/rebalance", (req: Request, res: Response) => {
   } catch (e) {
     res.status(500).json({
       error: e instanceof Error ? e.message : "Rebalance simulation failed",
+    });
+  }
+});
+
+/**
+ * POST /api/simulator/rebalance-backtest
+ *
+ * Runs a deterministic historical rebalance backtest and compares the
+ * rebalanced portfolio against a passive-hold benchmark. Simulation-only.
+ */
+router.post("/rebalance-backtest", (req: Request, res: Response) => {
+  try {
+    const params = req.body as RebalanceBacktestParams;
+    const errors = validateRebalanceBacktestParams(params);
+    if (errors.length > 0) {
+      res.status(400).json({ error: "Invalid backtest parameters", details: errors });
+      return;
+    }
+    const result = runRebalanceBacktest(params);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({
+      error: e instanceof Error ? e.message : "Rebalance backtest failed",
     });
   }
 });
