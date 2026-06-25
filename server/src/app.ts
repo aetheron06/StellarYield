@@ -8,6 +8,7 @@ import { context } from "./graphql/context";
 import { graphqlSchema } from "./graphql/schema";
 import { metricsMiddleware, getMetrics } from "./middleware/metrics";
 import { auditMiddleware } from "./middleware/audit";
+import { authMiddleware } from "./middleware/auth";
 import { sendError } from "./utils/errorResponse";
 import { requestContextMiddleware } from "./middleware/requestContext";
 import { correlationIdMiddleware } from "./middleware/correlationId";
@@ -40,6 +41,8 @@ import governanceRouter from "./routes/governance";
 import activityTimelineRouter from "./routes/activityTimeline";
 import presetsRouter from "./routes/presets";
 import analyticsRouter from "./routes/analytics";
+import offrampRouter from "./routes/offramp";
+import contactsRouter from "./routes/contacts";
 
 import { createAuthChallenge, verifyAuthChallenge } from "./utils/stellarAuth";
 import {
@@ -91,6 +94,7 @@ export function createApp() {
   app.use(requestLoggerMiddleware);
   app.use(metricsMiddleware);
   app.use(auditMiddleware);
+  app.use(authMiddleware);
   app.use(yoga.graphqlEndpoint, yoga);
 
   const relayerLimiter = rateLimit({
@@ -127,6 +131,8 @@ export function createApp() {
   app.use("/api/portfolio/activity", activityTimelineRouter);
   app.use("/api/presets", presetsRouter);
   app.use("/api/analytics", analyticsRouter);
+  app.use("/api/offramp", offrampRouter);
+  app.use("/api/contacts", contactsRouter);
 
 
   // Legacy JSON metrics (internal tooling)

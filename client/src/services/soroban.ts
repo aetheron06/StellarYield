@@ -50,7 +50,7 @@ function getServer(): StellarSdk.rpc.Server {
 
 async function getRecommendedBaseFee(priority: FeePriority = "average"): Promise<string> {
   try {
-    const response = await fetch("/api/fees");
+    const response = await apiFetch("/api/fees");
     if (!response.ok) {
       return StellarSdk.BASE_FEE;
     }
@@ -239,6 +239,52 @@ export async function executeContractCall(
     let finalXdr = signedXdr;
     if (useFeeBump) {
       onPhase?.("submitting");
+      const resp = await apiFetch("/api/relayer/fee-bump", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ innerTxXdr: signedXdr }),
+      });
+      const { feeBumpXdr } = await resp.json();
+      finalXdr = feeBumpXdr;
+    }
+
+    const result = await submitAndPoll(finalXdr, onPhase);
+
+    onPhase?.(result.success ? "success" : "failure");
+    return result;
+  } catch (err) {
+    onPhase?.("failure");
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Execute a contract call on a specific contract ID: build → sign → submit → poll.
+ */
+export async function executeContractCallOn(
+  contractId: string,
+  sourcePublicKey: string,
+  method: string,
+  args: StellarSdk.xdr.ScVal[],
+  onPhase?: TxPhaseCallback,
+  useFeeBump: boolean = false,
+  signTx?: (xdr: string, networkPassphrase: string) => Promise<string>,
+  txSettings?: TxSettings,
+): Promise<TxResult> {
+  try {
+    const contract = new StellarSdk.Contract(contractId);
+    const xdr = await buildContractCallOn(contract, sourcePublicKey, method, args, onPhase, txSettings);
+
+    onPhase?.("waiting_for_wallet");
+    const signer = signTx ?? ((x: string, p: string) => signWithFreighter(x, p));
+    const signedXdr = await signer(xdr, NETWORK_PASSPHRASE);
+
+    let finalXdr = signedXdr;
+    if (useFeeBump) {
+      onPhase?.("submitting");
       const resp = await fetch("/api/relayer/fee-bump", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -260,6 +306,7 @@ export async function executeContractCall(
     };
   }
 }
+
 
 /**
  * Invoke a method on the Zap contract (swap + `deposit_for` in one tx).
@@ -285,7 +332,7 @@ export async function executeZapContractCall(
     let finalXdr = signedXdr;
     if (useFeeBump) {
       onPhase?.("submitting");
-      const resp = await fetch("/api/relayer/fee-bump", {
+      const resp = await apiFetch("/api/relayer/fee-bump", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ innerTxXdr: signedXdr }),
